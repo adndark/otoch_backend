@@ -183,17 +183,20 @@ Our `Dockerfile` uses a **multi-stage build** pattern for optimal image size and
 ### Complete Dockerfile with Line-by-Line Explanation
 
 ```dockerfile
-# Build stage
-FROM maven:3.9-eclipse-temurin-17 AS build
+# Build stage using Gradle
+FROM gradle:8.5-jdk17 AS build
 WORKDIR /app
 
-# Copy pom.xml and download dependencies
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
+# Copy Gradle files first for dependency caching
+COPY build.gradle settings.gradle ./
+COPY gradle ./gradle
+
+# Download dependencies (cached layer)
+RUN gradle dependencies --no-daemon
 
 # Copy source code and build
 COPY src ./src
-RUN mvn package -DskipTests -B
+RUN gradle bootJar --no-daemon
 
 # Runtime stage
 FROM eclipse-temurin:17-jre-alpine
@@ -203,7 +206,7 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Copy JAR from build stage
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /app/build/libs/otoch-backend.jar app.jar
 
 # Change ownership and switch to non-root user
 RUN chown -R appuser:appgroup /app
@@ -224,21 +227,22 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 | Line | Instruction | Explanation |
 |------|-------------|-------------|
-| `FROM maven:3.9-eclipse-temurin-17 AS build` | **Base Image** | Uses the official Maven image with Eclipse Temurin JDK 17. The `AS build` names this stage for reference later. This image is ~800MB but is only used for building. |
+| `FROM gradle:8.5-jdk17 AS build` | **Base Image** | Uses the official Gradle image with JDK 17. The `AS build` names this stage for reference later. This image is only used for building. |
 | `WORKDIR /app` | **Working Directory** | Sets `/app` as the working directory inside the container. All subsequent commands run from this directory. Creates it if it doesn't exist. |
-| `COPY pom.xml .` | **Copy POM** | Copies only `pom.xml` first. This is intentional for **layer caching** - dependencies don't change often, so this layer can be cached. |
-| `RUN mvn dependency:go-offline -B` | **Download Dependencies** | Downloads all Maven dependencies. The `-B` flag runs Maven in batch (non-interactive) mode. This layer is cached unless `pom.xml` changes. |
+| `COPY build.gradle settings.gradle ./` | **Copy Build Files** | Copies Gradle build files first. This is intentional for **layer caching** - dependencies don't change often, so this layer can be cached. |
+| `COPY gradle ./gradle` | **Copy Gradle Wrapper** | Copies the Gradle wrapper directory for consistent builds. |
+| `RUN gradle dependencies --no-daemon` | **Download Dependencies** | Downloads all dependencies. `--no-daemon` prevents starting a background daemon (not useful in containers). This layer is cached unless build files change. |
 | `COPY src ./src` | **Copy Source** | Copies the source code. Done after dependencies so code changes don't invalidate the dependency cache. |
-| `RUN mvn package -DskipTests -B` | **Build JAR** | Compiles the code and packages it into a JAR file. `-DskipTests` skips tests for faster builds (tests should run in CI/CD). |
+| `RUN gradle bootJar --no-daemon` | **Build JAR** | Compiles the code and packages it into an executable JAR file. |
 
 ### Stage 2: Runtime Stage
 
 | Line | Instruction | Explanation |
 |------|-------------|-------------|
-| `FROM eclipse-temurin:17-jre-alpine` | **Runtime Base Image** | Uses a minimal Alpine Linux image with only the JRE (not JDK). This produces a much smaller final image (~200MB vs ~800MB). |
+| `FROM eclipse-temurin:17-jre-alpine` | **Runtime Base Image** | Uses a minimal Alpine Linux image with only the JRE (not JDK). This produces a much smaller final image (~200MB). |
 | `WORKDIR /app` | **Working Directory** | Sets the working directory in the runtime container. |
 | `RUN addgroup -S appgroup && adduser -S appuser -G appgroup` | **Create Non-Root User** | Creates a system group and user for security. Running as root inside containers is a security risk. `-S` creates a system user/group. |
-| `COPY --from=build /app/target/*.jar app.jar` | **Copy Artifact** | Copies the built JAR from the build stage. `--from=build` references the first stage. Only the JAR is copied, not Maven or source code. |
+| `COPY --from=build /app/build/libs/otoch-backend.jar app.jar` | **Copy Artifact** | Copies the built JAR from the build stage. `--from=build` references the first stage. Only the JAR is copied, not Gradle or source code. |
 | `RUN chown -R appuser:appgroup /app` | **Set Ownership** | Changes ownership of the app directory to the non-root user. |
 | `USER appuser` | **Switch User** | All subsequent commands and the container process run as `appuser`, not root. |
 | `EXPOSE 8080` | **Document Port** | Documents that the container listens on port 8080. This is informational; actual port mapping happens at runtime. |
@@ -269,12 +273,12 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
 
 ## Why Use a Docker Image to Compile Code?
 
-Yes, a Docker image is used to compile the code. The first stage of our Dockerfile uses the **Maven image** (`maven:3.9-eclipse-temurin-17`) specifically to build the Java application. Here’s why that design is used and what it gives you.
+Yes, a Docker image is used to compile the code. The first stage of our Dockerfile uses the **Gradle image** (`gradle:8.5-jdk17`) specifically to build the Java application. Here’s why that design is used and what it gives you.
 
 ### What Actually Happens
 
-1. **Build stage** – Docker starts a container from the Maven image. Inside that container it runs `mvn dependency:go-offline` and `mvn package`. So **compilation happens inside a container**, not on your host. The output is the JAR in `/app/target/`.
-2. **Runtime stage** – A new, minimal image (JRE only) is used. Only the built JAR is copied in with `COPY --from=build ...`. Maven, JDK, and source code are **not** part of this final image.
+1. **Build stage** – Docker starts a container from the Gradle image. Inside that container it runs `gradle dependencies` and `gradle bootJar`. So **compilation happens inside a container**, not on your host. The output is the JAR in `/app/build/libs/`.
+2. **Runtime stage** – A new, minimal image (JRE only) is used. Only the built JAR is copied in with `COPY --from=build ...`. Gradle, JDK, and source code are **not** part of this final image.
 
 So: one image is used as the **build environment** (compile + package), and a different image is used as the **run environment** (only run the JAR).
 
@@ -282,24 +286,24 @@ So: one image is used as the **build environment** (compile + package), and a di
 
 | Reason | Explanation |
 |--------|-------------|
-| **Reproducibility** | The same Maven and JDK versions are used every time, on any machine. No “works on my machine” due to different Java or Maven versions. |
-| **No host tooling required** | You don’t need Java or Maven installed on the host. Only Docker is required to build and run. |
-| **Isolation** | Build dependencies and cache live inside the build container, not in your global Maven repo, so builds are isolated and consistent. |
+| **Reproducibility** | The same Gradle and JDK versions are used every time, on any machine. No “works on my machine” due to different Java or Gradle versions. |
+| **No host tooling required** | You don’t need Java or Gradle installed on the host. Only Docker is required to build and run. |
+| **Isolation** | Build dependencies and cache live inside the build container, not in your local Gradle cache, so builds are isolated and consistent. |
 | **CI/CD alignment** | CI pipelines (Jenkins, GitHub Actions, etc.) typically run in containers. Building inside Docker matches that: “build in container, run in container.” |
-| **Smaller final image** | The final image does not include the JDK, Maven, or source. It only has the JRE and the JAR, so the image stays small and secure. |
+| **Smaller final image** | The final image does not include the JDK, Gradle, or source. It only has the JRE and the JAR, so the image stays small and secure. |
 
 ### Why Not Compile on the Host and Only Copy the JAR?
 
-You could build on the host (`mvn package`) and then copy the JAR into a simple runtime image. That approach has drawbacks:
+You could build on the host (`./gradlew build`) and then copy the JAR into a simple runtime image. That approach has drawbacks:
 
 - **Requires host tooling** – Everyone and every CI job needs the same Java and Maven versions.
 - **Reproducibility** – Different developers or CI nodes can produce subtly different JARs (different OS, JDK vendor, or Maven version).
-- **Single source of truth** – With “build inside Docker,” the Dockerfile is the only place that defines how the app is built and run; no separate docs for “install this JDK and Maven.”
+- **Single source of truth** – With “build inside Docker,” the Dockerfile is the only place that defines how the app is built and run; no separate docs for “install this JDK.”
 
 ### Why Two Stages (Build vs Runtime)?
 
-- **Build stage** – Bigger image (Maven + JDK) is acceptable because it’s only used during `docker build` and is discarded. It’s never shipped or run in production.
-- **Runtime stage** – Only JRE + JAR. No compiler, no Maven, no source. That’s what gets stored locally (and in a registry), used in production, and kept small and secure.
+- **Build stage** – Bigger image (Gradle + JDK) is acceptable because it’s only used during `docker build` and is discarded. It’s never shipped or run in production.
+- **Runtime stage** – Only JRE + JAR. No compiler, no Gradle, no source. That’s what gets stored locally (and in a registry), used in production, and kept small and secure.
 
 So: **a Docker image is used to compile the code** so that building is reproducible and independent of the host, and the **final image** that you store and run only contains what’s needed to run the app.
 
@@ -475,6 +479,59 @@ docker-compose build otoch-backend
 
 # Scale service (multiple instances)
 docker-compose up -d --scale otoch-backend=3
+```
+
+### Understanding the `--build` Flag
+
+The `--build` flag controls whether Docker Compose rebuilds images before starting containers.
+
+**Command behavior:**
+
+| Command | Behavior |
+|---------|----------|
+| `docker-compose up` | Uses existing image if one exists. Only builds if no image exists. |
+| `docker-compose up --build` | Always rebuilds the image before starting, even if one exists. |
+
+**When is `--build` required?**
+
+| Scenario | `docker-compose up` | `docker-compose up --build` |
+|----------|--------------------|-----------------------------|
+| First run (no image exists) | Builds automatically | Builds |
+| Code changes (same Dockerfile) | Uses old image (stale!) | Rebuilds with new code |
+| Dockerfile changes | Uses old image (stale!) | Rebuilds with new Dockerfile |
+| No changes | Uses cached image (fast) | Rebuilds (slower, unnecessary) |
+
+**Best practice during development:**
+
+Always use `--build` to ensure your latest code changes are included:
+
+```bash
+docker-compose up --build
+```
+
+Without `--build`, Docker Compose will happily run an old cached image even if you've made code changes—your new code won't be in the container!
+
+**When you can skip `--build`:**
+
+- Running the same code again (no changes)
+- Production deployments where images are built separately and pushed to a registry
+
+**Common mistake:**
+
+```bash
+# You make code changes...
+docker-compose up          # Runs OLD code (cached image)!
+docker-compose up --build  # Runs NEW code (rebuilds image)
+```
+
+**Cleaning up stale images:**
+
+If you encounter errors about missing images or want a completely fresh build:
+
+```bash
+# Remove all images and volumes, then rebuild
+docker-compose down --rmi all --volumes --remove-orphans
+docker-compose up --build
 ```
 
 ### Container Management

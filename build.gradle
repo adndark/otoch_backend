@@ -1,0 +1,146 @@
+/*
+ * Gradle Build Configuration for Otoch Backend
+ * 
+ * This file defines:
+ *   - Plugins: Extend Gradle functionality (Java, Spring Boot)
+ *   - Project metadata: Group, version, Java version
+ *   - Repositories: Where to download dependencies from
+ *   - Dependencies: Libraries this project needs
+ *   - Task configuration: Customize build behavior
+ *
+ * Common commands:
+ *   ./gradlew build      - Compile, test, and package
+ *   ./gradlew bootRun    - Run the application
+ *   ./gradlew test       - Run tests only
+ *   ./gradlew clean      - Delete build directory
+ *   ./gradlew tasks      - List all available tasks
+ *
+ * Documentation: docs/GRADLE.md
+ */
+
+// =============================================================================
+// PLUGINS
+// Plugins extend Gradle's capabilities. Each plugin adds tasks and configuration.
+// =============================================================================
+plugins {
+    // Java Plugin: Adds tasks for compiling Java, running tests, creating JARs
+    // Provides: compileJava, processResources, classes, jar, test, etc.
+    id 'java'
+
+    // Spring Boot Plugin: Adds Spring Boot support
+    // Provides: bootRun (run app), bootJar (create executable JAR)
+    // Version must match your Spring Boot version
+    id 'org.springframework.boot' version '3.2.2'
+
+    // Dependency Management Plugin: Imports Spring Boot's BOM (Bill of Materials)
+    // Allows omitting versions for Spring dependencies - they're managed automatically
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+// =============================================================================
+// PROJECT METADATA
+// Identifies this project (similar to Maven's groupId:artifactId:version)
+// =============================================================================
+
+// Group ID: Usually your organization's domain in reverse (com.example)
+group = 'com.otoch'
+
+// Version: SNAPSHOT indicates development version, remove for releases
+version = '0.0.1-SNAPSHOT'
+
+// =============================================================================
+// JAVA CONFIGURATION
+// Specify Java version for compilation
+// =============================================================================
+java {
+    // Source compatibility: Compile source code for Java 17
+    // This must match your JDK version and the version in Dockerfile
+    sourceCompatibility = '17'
+}
+
+// =============================================================================
+// REPOSITORIES
+// Where Gradle downloads dependencies from
+// =============================================================================
+repositories {
+    // Maven Central: The main public repository for Java libraries
+    // Contains most open-source Java dependencies
+    // URL: https://repo.maven.apache.org/maven2/
+    mavenCentral()
+
+    // Other common repositories (not used here):
+    // google()          - Google's Android/Firebase libraries
+    // gradlePluginPortal() - Gradle plugins
+    // maven { url 'https://...' } - Custom/private repositories
+}
+
+// =============================================================================
+// DEPENDENCIES
+// Libraries this project needs to compile and run
+// 
+// Configurations:
+//   implementation     - Compile + runtime (included in JAR)
+//   compileOnly        - Compile only, not in JAR (e.g., Lombok)
+//   runtimeOnly        - Runtime only (e.g., database drivers)
+//   testImplementation - Test compile + runtime (not in production JAR)
+//   testRuntimeOnly    - Test runtime only
+//
+// Note: No versions specified - managed by Spring Boot's BOM
+// =============================================================================
+dependencies {
+    // --- Runtime Dependencies (included in production JAR) ---
+
+    // Spring Boot Web Starter
+    // Includes: Spring MVC, embedded Tomcat, Jackson (JSON)
+    // Enables: @RestController, @RequestMapping, REST APIs
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // Spring Boot Validation Starter
+    // Includes: Hibernate Validator, Jakarta Validation API
+    // Enables: @Valid, @NotBlank, @Positive, etc.
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Spring Boot Actuator Starter
+    // Includes: Health checks, metrics, monitoring endpoints
+    // Enables: /actuator/health, /actuator/info
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // --- Test Dependencies (not included in production JAR) ---
+
+    // Spring Boot Test Starter
+    // Includes: JUnit 5, Mockito, Spring Test, MockMvc, AssertJ
+    // Enables: @SpringBootTest, @WebMvcTest, @MockBean
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+// =============================================================================
+// TASK CONFIGURATION
+// Customize how tasks behave
+// =============================================================================
+
+// Configure the 'test' task
+// This task runs unit tests using JUnit
+tasks.named('test') {
+    // Use JUnit Platform (JUnit 5) for running tests
+    // Required for JUnit 5 tests to be discovered and executed
+    useJUnitPlatform()
+
+    // Optional: Show test events in console
+    // testLogging {
+    //     events "passed", "skipped", "failed"
+    // }
+}
+
+// Configure the 'bootJar' task
+// This task creates the executable JAR with embedded Tomcat
+tasks.named('bootJar') {
+    // Customize the output JAR filename
+    // Default would be: otoch-backend-0.0.1-SNAPSHOT.jar
+    // This sets it to: otoch-backend.jar
+    archiveFileName = 'otoch-backend.jar'
+
+    // Other useful options:
+    // archiveBaseName = 'app'        // Base name
+    // archiveVersion = ''            // Remove version from name
+    // archiveClassifier = 'boot'     // Add classifier
+}

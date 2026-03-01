@@ -1,14 +1,17 @@
-# Build stage
-FROM maven:3.9-eclipse-temurin-17 AS build
+# Build stage using Gradle
+FROM gradle:8.5-jdk17 AS build
 WORKDIR /app
 
-# Copy pom.xml and download dependencies
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
+# Copy Gradle files first for dependency caching
+COPY build.gradle settings.gradle ./
+COPY gradle ./gradle
+
+# Download dependencies (cached layer)
+RUN gradle dependencies --no-daemon
 
 # Copy source code and build
 COPY src ./src
-RUN mvn package -DskipTests -B
+RUN gradle bootJar --no-daemon
 
 # Runtime stage
 FROM eclipse-temurin:17-jre-alpine
@@ -18,7 +21,7 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Copy JAR from build stage
-COPY --from=build /app/target/*.jar app.jar
+COPY --from=build /app/build/libs/otoch-backend.jar app.jar
 
 # Change ownership and switch to non-root user
 RUN chown -R appuser:appgroup /app

@@ -1,0 +1,62 @@
+/*
+ * Gradle Settings Configuration
+ *
+ * This file is evaluated before build.gradle and defines:
+ *   - Project name (used in JAR filenames, logs, etc.)
+ *   - Multi-project structure (for multi-module projects)
+ *   - Plugin management (centralized plugin versions)
+ *   - Repository configuration (for plugin resolution)
+ *
+ * This file is processed first during Gradle initialization.
+ *
+ * Documentation: docs/GRADLE.md
+ */
+
+// =============================================================================
+// PROJECT NAME
+// Defines the root project name
+// This name is used in:
+//   - JAR filenames (otoch-backend.jar)
+//   - Gradle output and logs
+//   - IDE project name
+// =============================================================================
+rootProject.name = 'otoch-backend'
+
+// =============================================================================
+// MULTI-PROJECT CONFIGURATION (not used in this project)
+// For projects with multiple modules, you would include them here:
+//
+// rootProject.name = 'otoch'
+// include 'otoch-backend'
+// include 'otoch-frontend'
+// include 'otoch-common'
+//
+// Each included project would have its own build.gradle
+// =============================================================================
+
+// =============================================================================
+// PLUGIN MANAGEMENT (optional, not used in this project)
+// Centralize plugin versions for multi-project builds:
+//
+// pluginManagement {
+//     plugins {
+//         id 'org.springframework.boot' version '3.2.2'
+//         id 'io.spring.dependency-management' version '1.1.4'
+//     }
+//     repositories {
+//         gradlePluginPortal()
+//         mavenCentral()
+//     }
+// }
+// =============================================================================
+
+// =============================================================================
+// DEPENDENCY RESOLUTION MANAGEMENT (optional, not used in this project)
+// Centralize repository configuration:
+//
+// dependencyResolutionManagement {
+//     repositories {
+//         mavenCentral()
+//     }
+// }
+// =============================================================================

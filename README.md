@@ -5,8 +5,9 @@ A simple Java Spring Boot RESTful service with Docker support.
 ## Prerequisites
 
 - **Java 17+** (for local development)
-- **Maven 3.9+** (for local development)
 - **Docker** (for containerized deployment)
+
+Note: Gradle is included via the wrapper (`./gradlew`), so you don't need to install it separately.
 
 ## Project Structure
 
@@ -23,7 +24,10 @@ otoch_backend/
 │       └── ItemService.java        # Business logic
 ├── src/main/resources/
 │   └── application.properties      # Application configuration
-├── pom.xml                         # Maven dependencies
+├── build.gradle                    # Gradle build configuration
+├── settings.gradle                 # Gradle settings
+├── gradlew                         # Gradle wrapper (Unix)
+├── gradlew.bat                     # Gradle wrapper (Windows)
 ├── Dockerfile                      # Docker image configuration
 ├── docker-compose.yml              # Docker Compose configuration
 └── README.md
@@ -54,17 +58,17 @@ docker build -t otoch-backend .
 docker run -p 8080:8080 otoch-backend
 ```
 
-### Option 3: Running Locally with Maven
+### Option 3: Running Locally with Gradle
 
 ```bash
 # Build the application
-mvn clean package
+./gradlew build
 
 # Run the application
-mvn spring-boot:run
+./gradlew bootRun
 
 # Or run the JAR directly
-java -jar target/otoch-backend-0.0.1-SNAPSHOT.jar
+java -jar build/libs/otoch-backend.jar
 ```
 
 ## API Documentation
@@ -212,6 +216,16 @@ Returns `400 Bad Request` with validation error details.
 | PUT    | `/api/items/{id}` | Update an item       |
 | DELETE | `/api/items/{id}` | Delete an item       |
 
+## Gradle Commands
+
+| Task | Command |
+|------|---------|
+| Build | `./gradlew build` |
+| Run | `./gradlew bootRun` |
+| Test | `./gradlew test` |
+| Clean | `./gradlew clean` |
+| Build (skip tests) | `./gradlew build -x test` |
+
 ## Configuration
 
 Environment variables can be set to configure the application:
@@ -227,3 +241,9 @@ Spring Boot Actuator provides additional monitoring endpoints:
 
 - `http://localhost:8080/actuator/health` - Application health
 - `http://localhost:8080/actuator/info` - Application info
+
+## Documentation
+
+- [Spring Boot Documentation](docs/SPRINGBOOT.md) - Spring Boot architecture, patterns, and code structure
+- [Gradle Documentation](docs/GRADLE.md) - Gradle build system and Docker integration
+- [Docker Documentation](docs/DOCKER.md) - Docker configuration and usage
