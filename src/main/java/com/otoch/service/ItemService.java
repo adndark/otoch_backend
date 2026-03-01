@@ -19,8 +19,10 @@ public class ItemService {
     public ItemService() {
         Item sample1 = new Item(idGenerator.getAndIncrement(), "Sample Item 1", "A sample item for testing", 19.99);
         Item sample2 = new Item(idGenerator.getAndIncrement(), "Sample Item 2", "Another sample item", 29.99);
+        Item sample3 = new Item(idGenerator.getAndIncrement(), "Sample Item 2", "Another THIRD sample item", 29.99);
         items.put(sample1.getId(), sample1);
         items.put(sample2.getId(), sample2);
+        items.put(sample2.getId(), sample3);
     }
 
     public List<Item> getAllItems() {

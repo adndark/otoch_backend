@@ -702,6 +702,51 @@ services:
 
 ## Troubleshooting
 
+### ImageNotFound / "No such image" Error
+
+**Error messages:**
+
+```
+docker.errors.ImageNotFound: 404 Client Error... No such image: sha256:...
+ERROR: No such image: sha256:...
+ERROR: The image for the service you're trying to recreate has been removed.
+```
+
+**Cause:** Docker has cached references to an old image that no longer exists. This typically happens after:
+- Deleting or rebuilding images manually
+- Docker system cleanup
+- Changing the Dockerfile significantly
+- Switching between build tools (e.g., Maven to Gradle)
+
+**Solution:**
+
+```bash
+# Step 1: Stop and remove everything related to this project
+docker-compose down --rmi all --volumes --remove-orphans
+
+# Step 2: Clean up dangling resources
+docker system prune -f
+
+# Step 3: Rebuild from scratch
+docker-compose up --build
+```
+
+**One-liner fix:**
+
+```bash
+docker-compose down --rmi all --volumes --remove-orphans && docker system prune -f && docker-compose up --build
+```
+
+**Explanation of flags:**
+- `--rmi all` - Remove all images used by services
+- `--volumes` - Remove named volumes declared in the compose file
+- `--remove-orphans` - Remove containers for services not defined in the compose file
+- `docker system prune -f` - Remove all unused containers, networks, and dangling images
+
+**Prevention:** This error often occurs when Docker's cache becomes inconsistent. During development, consistently use `docker-compose up --build` to ensure fresh builds.
+
+---
+
 ### Container Won't Start
 
 ```bash

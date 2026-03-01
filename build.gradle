@@ -7,13 +7,20 @@
  *   - Repositories: Where to download dependencies from
  *   - Dependencies: Libraries this project needs
  *   - Task configuration: Customize build behavior
+ *   - Docker tasks: Build, run, and manage Docker containers
  *
  * Common commands:
- *   ./gradlew build      - Compile, test, and package
- *   ./gradlew bootRun    - Run the application
- *   ./gradlew test       - Run tests only
- *   ./gradlew clean      - Delete build directory
- *   ./gradlew tasks      - List all available tasks
+ *   ./gradlew build        - Compile, test, and package
+ *   ./gradlew bootRun      - Run the application locally
+ *   ./gradlew test         - Run tests only
+ *   ./gradlew clean        - Delete build directory
+ *   ./gradlew tasks        - List all available tasks
+ *
+ * Docker commands:
+ *   ./gradlew dockerClean  - Clean Docker cached images (fixes ImageNotFound errors)
+ *   ./gradlew dockerBuild  - Build Docker image
+ *   ./gradlew dockerRun    - Build and run in Docker
+ *   ./gradlew dockerStop   - Stop Docker container
  *
  * Documentation: docs/GRADLE.md
  */
@@ -143,4 +150,115 @@ tasks.named('bootJar') {
     // archiveBaseName = 'app'        // Base name
     // archiveVersion = ''            // Remove version from name
     // archiveClassifier = 'boot'     // Add classifier
+}
+
+// =============================================================================
+// DOCKER TASKS
+// Custom tasks for Docker operations
+// These tasks require Docker and docker-compose to be installed
+// =============================================================================
+
+// Task: dockerClean
+// Cleans Docker cached images to fix "ImageNotFound" and "No such image" errors
+// Usage: ./gradlew dockerClean
+tasks.register('dockerClean', Exec) {
+    group = 'docker'
+    description = 'Clean Docker cached images (fixes ImageNotFound errors)'
+    
+    commandLine 'sh', '-c', '''
+        echo "Stopping containers and removing images..."
+        docker-compose down --rmi all --volumes --remove-orphans 2>/dev/null || true
+        echo "Pruning unused Docker resources..."
+        docker system prune -f 2>/dev/null || true
+        echo "Docker cleanup complete!"
+    '''
+}
+
+// Task: dockerBuild
+// Builds the Docker image using docker-compose
+// Usage: ./gradlew dockerBuild
+tasks.register('dockerBuild', Exec) {
+    group = 'docker'
+    description = 'Build Docker image'
+    
+    commandLine 'docker-compose', 'build'
+}
+
+// Task: dockerRun
+// Builds and runs the application in Docker
+// Usage: ./gradlew dockerRun
+tasks.register('dockerRun', Exec) {
+    group = 'docker'
+    description = 'Build and run the application in Docker'
+    
+    commandLine 'docker-compose', 'up', '--build', '-d'
+    
+    doLast {
+        println ''
+        println '================================================'
+        println 'Application starting in Docker...'
+        println 'Health check: http://localhost:8080/api/health'
+        println 'API endpoint: http://localhost:8080/api/items'
+        println ''
+        println 'View logs:    docker-compose logs -f'
+        println 'Stop:         ./gradlew dockerStop'
+        println '================================================'
+    }
+}
+
+// Task: dockerStop
+// Stops the Docker container
+// Usage: ./gradlew dockerStop
+tasks.register('dockerStop', Exec) {
+    group = 'docker'
+    description = 'Stop Docker container'
+    
+    commandLine 'docker-compose', 'down'
+}
+
+// Task: dockerLogs
+// Shows Docker container logs
+// Usage: ./gradlew dockerLogs
+tasks.register('dockerLogs', Exec) {
+    group = 'docker'
+    description = 'Show Docker container logs'
+    
+    commandLine 'docker-compose', 'logs', '--tail=100'
+}
+
+// Task: dockerStatus
+// Shows Docker container status
+// Usage: ./gradlew dockerStatus
+tasks.register('dockerStatus', Exec) {
+    group = 'docker'
+    description = 'Show Docker container status'
+    
+    commandLine 'sh', '-c', '''
+        echo "=== Container Status ==="
+        docker-compose ps
+        echo ""
+        echo "=== Health Check ==="
+        curl -s http://localhost:8080/api/health 2>/dev/null || echo "Container not running or not healthy yet"
+    '''
+}
+
+// Task: dockerRebuild
+// Full clean rebuild: cleans cache, rebuilds, and runs
+// Usage: ./gradlew dockerRebuild
+tasks.register('dockerRebuild') {
+    group = 'docker'
+    description = 'Full clean rebuild: clean cache, rebuild, and run'
+    
+    dependsOn 'dockerClean'
+    
+    doLast {
+        exec {
+            commandLine 'docker-compose', 'up', '--build', '-d'
+        }
+        println ''
+        println '================================================'
+        println 'Full rebuild complete! Application starting...'
+        println 'Health check: http://localhost:8080/api/health'
+        println '================================================'
+    }
 }

@@ -491,6 +491,56 @@ Keep Gradle versions consistent:
 
 If you update one, update the other to avoid "works locally but fails in Docker" issues.
 
+### Custom Docker Tasks
+
+This project includes custom Gradle tasks for Docker operations, defined in `build.gradle`:
+
+```bash
+# List all Docker tasks
+./gradlew tasks --group=docker
+```
+
+**Available Docker tasks:**
+
+| Task | Command | Description |
+|------|---------|-------------|
+| `dockerClean` | `./gradlew dockerClean` | Clean Docker cached images (fixes ImageNotFound errors) |
+| `dockerBuild` | `./gradlew dockerBuild` | Build Docker image |
+| `dockerRun` | `./gradlew dockerRun` | Build and run in Docker (detached) |
+| `dockerStop` | `./gradlew dockerStop` | Stop Docker container |
+| `dockerLogs` | `./gradlew dockerLogs` | Show container logs |
+| `dockerStatus` | `./gradlew dockerStatus` | Show container status and health |
+| `dockerRebuild` | `./gradlew dockerRebuild` | Full clean rebuild (clean + build + run) |
+
+**Example workflow:**
+
+```bash
+# First time or after errors
+./gradlew dockerRebuild
+
+# Normal development
+./gradlew dockerRun
+
+# Check if it's running
+./gradlew dockerStatus
+
+# View logs
+./gradlew dockerLogs
+
+# Stop when done
+./gradlew dockerStop
+```
+
+**Fixing "ImageNotFound" errors:**
+
+```bash
+# This cleans all cached Docker resources and fixes the error
+./gradlew dockerClean
+
+# Then rebuild
+./gradlew dockerRun
+```
+
 ---
 
 ## Common Gradle Commands
