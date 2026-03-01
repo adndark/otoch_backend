@@ -8,15 +8,16 @@ This document provides a comprehensive explanation of Spring Boot and all Spring
 
 1. [What is Spring Boot?](#what-is-spring-boot)
 2. [Project Structure](#project-structure)
-3. [Build Process (Maven)](#build-process-maven)
-4. [Dependencies Explained](#dependencies-explained)
-5. [Application Entry Point](#application-entry-point)
-6. [Architectural Patterns](#architectural-patterns)
-7. [Code Structure and Layers](#code-structure-and-layers)
-8. [Annotations Reference](#annotations-reference)
-9. [Configuration](#configuration)
-10. [Testing](#testing)
-11. [Common Maven Commands](#common-maven-commands)
+3. [Local Development Setup (Ubuntu)](#local-development-setup-ubuntu)
+4. [Build Process (Maven)](#build-process-maven)
+5. [Dependencies Explained](#dependencies-explained)
+6. [Application Entry Point](#application-entry-point)
+7. [Architectural Patterns](#architectural-patterns)
+8. [Code Structure and Layers](#code-structure-and-layers)
+9. [Annotations Reference](#annotations-reference)
+10. [Configuration](#configuration)
+11. [Testing](#testing)
+12. [Common Maven Commands](#common-maven-commands)
 
 ---
 
@@ -94,6 +95,186 @@ otoch_backend/
 | `com.otoch.config` | Configuration classes (not used yet) |
 
 **Important:** The main application class (`OtochApplication.java`) must be in the root package (`com.otoch`) so that `@SpringBootApplication` can scan all sub-packages.
+
+---
+
+## Local Development Setup (Ubuntu)
+
+You can compile, test, and run the application locally on Ubuntu without using Docker. This requires **Java JDK 17** and **Maven** installed on your machine.
+
+### Prerequisites
+
+#### Option 1: Using apt (Ubuntu packages)
+
+```bash
+# Update package index
+sudo apt update
+
+# Install OpenJDK 17
+sudo apt install openjdk-17-jdk
+
+# Install Maven
+sudo apt install maven
+
+# Verify installations
+java -version    # Should show: openjdk version "17.x.x"
+mvn -version     # Should show: Apache Maven 3.x.x
+```
+
+#### Option 2: Using SDKMAN (recommended for managing multiple Java versions)
+
+[SDKMAN](https://sdkman.io/) is a tool for managing parallel versions of multiple SDKs. It's useful if you work on projects requiring different Java versions.
+
+```bash
+# Install SDKMAN
+curl -s "https://get.sdkman.io" | bash
+
+# Open a new terminal or run:
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# Install Java 17 (Eclipse Temurin distribution)
+sdk install java 17.0.10-tem
+
+# Install Maven
+sdk install maven
+
+# Verify installations
+java -version
+mvn -version
+```
+
+**SDKMAN advantages:**
+
+- Install multiple Java versions side-by-side
+- Switch versions per project or globally
+- No sudo required
+- Easy updates
+
+### Compile and Test Locally
+
+Navigate to the project directory and run Maven commands:
+
+```bash
+cd /home/adndark/projects/otoch/otoch_backend
+
+# Compile the source code only
+mvn compile
+
+# Compile and run all tests
+mvn test
+
+# Compile, test, and package into executable JAR
+mvn package
+
+# Clean previous builds, then compile and package
+mvn clean package
+
+# Package without running tests (faster)
+mvn package -DskipTests
+```
+
+### Run the Application Locally
+
+```bash
+# Option 1: Run via Maven (compiles automatically if needed)
+mvn spring-boot:run
+
+# Option 2: Run the packaged JAR (requires mvn package first)
+java -jar target/otoch-backend-0.0.1-SNAPSHOT.jar
+
+# Run with a specific port
+java -jar target/otoch-backend-0.0.1-SNAPSHOT.jar --server.port=9090
+
+# Run with a specific profile
+java -jar target/otoch-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+```
+
+The application starts on `http://localhost:8080` by default.
+
+### Verify the Application is Running
+
+Open another terminal and test the endpoints:
+
+```bash
+# Health check
+curl http://localhost:8080/api/health
+
+# Get all items
+curl http://localhost:8080/api/items
+
+# Create a new item
+curl -X POST http://localhost:8080/api/items \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Test Item", "description": "Created locally", "price": 9.99}'
+```
+
+### Quick Reference: Local Development Commands
+
+| Task | Command |
+|------|---------|
+| Install Java (apt) | `sudo apt install openjdk-17-jdk` |
+| Install Maven (apt) | `sudo apt install maven` |
+| Compile source | `mvn compile` |
+| Run tests | `mvn test` |
+| Run single test class | `mvn test -Dtest=ItemControllerTests` |
+| Package JAR | `mvn package` |
+| Package (skip tests) | `mvn package -DskipTests` |
+| Clean and package | `mvn clean package` |
+| Run via Maven | `mvn spring-boot:run` |
+| Run JAR | `java -jar target/otoch-backend-0.0.1-SNAPSHOT.jar` |
+| Stop application | `Ctrl+C` |
+
+### Local vs Docker: When to Use Which
+
+| Scenario | Recommended Approach |
+|----------|---------------------|
+| Quick code changes and testing | Local (`mvn spring-boot:run`) |
+| Running tests during development | Local (`mvn test`) |
+| IDE debugging | Local (run from IDE) |
+| Ensuring reproducible builds | Docker (`docker-compose up --build`) |
+| Testing production-like environment | Docker |
+| Deploying to servers | Docker |
+| CI/CD pipelines | Docker |
+
+### Troubleshooting Local Setup
+
+**Java not found after installation:**
+
+```bash
+# Check if JAVA_HOME is set
+echo $JAVA_HOME
+
+# If not set, add to ~/.bashrc:
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH=$JAVA_HOME/bin:$PATH
+
+# Reload shell
+source ~/.bashrc
+```
+
+**Maven using wrong Java version:**
+
+```bash
+# Check which Java Maven is using
+mvn -version
+
+# Force Maven to use specific Java
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+mvn clean package
+```
+
+**Port 8080 already in use:**
+
+```bash
+# Find what's using port 8080
+sudo lsof -i :8080
+
+# Kill the process (replace PID with actual process ID)
+kill -9 <PID>
+
+# Or run on a different port
+mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=9090
+```
 
 ---
 
