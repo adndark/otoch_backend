@@ -1,0 +1,21 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+*.iml
+.vscode
+
+# Build outputs
+target/
+*.jar
+!*.jar.original
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
