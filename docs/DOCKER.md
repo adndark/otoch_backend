@@ -8,11 +8,13 @@ This document provides a comprehensive explanation of Docker and all Docker-rela
 
 1. [What is Docker?](#what-is-docker)
 2. [Core Docker Concepts](#core-docker-concepts)
-3. [Dockerfile Explained](#dockerfile-explained)
-4. [Docker Compose Explained](#docker-compose-explained)
-5. [Dockerignore Explained](#dockerignore-explained)
-6. [Common Docker Commands](#common-docker-commands)
-7. [Best Practices Used](#best-practices-used)
+3. [Where Docker Images Are Stored](#where-docker-images-are-stored)
+4. [Dockerfile Explained](#dockerfile-explained)
+5. [Why Use a Docker Image to Compile Code?](#why-use-a-docker-image-to-compile-code)
+6. [Docker Compose Explained](#docker-compose-explained)
+7. [Dockerignore Explained](#dockerignore-explained)
+8. [Common Docker Commands](#common-docker-commands)
+9. [Best Practices Used](#best-practices-used)
 
 ---
 
@@ -96,6 +98,81 @@ A **registry** is a storage and distribution system for Docker images. Docker Hu
 ### 7. Networks
 
 Docker **networks** allow containers to communicate with each other and the outside world in a controlled manner.
+
+---
+
+## Where Docker Images Are Stored
+
+Docker images exist in two main places: **locally** on your machine (used when you build or pull) and **remotely** in registries (used when you push or pull across machines/teams).
+
+### Local Storage (On Your Machine)
+
+When you run `docker build` or `docker pull`, images are stored on the host where the Docker daemon runs.
+
+| Aspect | Details |
+|--------|---------|
+| **Location** | Controlled by the Docker **data root** (also called "data directory"). |
+| **Default path (Linux)** | `/var/lib/docker/` |
+| **Default path (macOS)** | `~/Library/Containers/com.docker.docker/Data/vms/0/` (inside the Docker Desktop VM) |
+| **Default path (Windows)** | `C:\ProgramData\Docker\` (WSL2 backend uses a virtual disk) |
+
+Under the data root, images are stored under `image/` (e.g. `overlay2` driver stores layers there). You do not normally browse these directories; you use Docker commands to list and manage images.
+
+**Find your data root:**
+
+```bash
+docker info --format '{{.DockerRootDir}}'
+```
+
+**What is stored locally:**
+
+- **Image layers** – Each instruction in a Dockerfile creates a layer. Layers are shared between images (same base image = same layers on disk).
+- **Image metadata** – Image IDs, tags, and manifest data.
+- **Build cache** – Cached layers from previous builds (used when you run `docker build` again).
+
+**List locally stored images:**
+
+```bash
+docker images
+# or
+docker image ls
+```
+
+**Remove local images to free space:**
+
+```bash
+docker rmi otoch-backend:latest
+docker image prune -a   # Remove all unused images
+```
+
+### Remote Storage (Registries)
+
+Images can be pushed to and pulled from a **registry** so they can be shared or deployed elsewhere.
+
+| Registry type | Example | Typical use |
+|---------------|---------|-------------|
+| **Public** | Docker Hub (`docker.io`) | Public images, e.g. `docker.io/library/maven:3.9-eclipse-temurin-17` |
+| **Private / org** | Docker Hub (`myorg/otoch-backend`), GitHub Container Registry (GHCR) | Team or org images |
+| **Cloud** | Amazon ECR, Google GCR, Azure ACR | Production deployments in that cloud |
+
+**Flow:**
+
+1. **Pull** – `docker pull myregistry.com/otoch-backend:v1` → image is downloaded from the registry and stored **locally** (in the data root).
+2. **Push** – `docker push myregistry.com/otoch-backend:v1` → image layers are uploaded from your **local** storage to the registry.
+3. **Run** – `docker run myregistry.com/otoch-backend:v1` uses the image from **local** storage (Docker pulls it first if it’s not present).
+
+**Default registry:** If you use a short name like `otoch-backend`, Docker uses Docker Hub (`docker.io`). For other registries you use the full name: `myregistry.com/otoch-backend:v1`.
+
+### Summary: Where Is the Image When?
+
+| Action | Where the image is |
+|--------|--------------------|
+| After `docker build -t otoch-backend .` | **Local only** – in your Docker data root; no copy in a registry yet. |
+| After `docker pull myreg/otoch-backend:latest` | **Local** – downloaded from registry into your data root. |
+| After `docker push myreg/otoch-backend:latest` | **Local and remote** – still local, and a copy now exists in the registry. |
+| When you `docker run otoch-backend` | **Local** – container is created from the image in your data root. |
+
+So: **containers always run from images stored locally**; registries are for moving images between machines and environments.
 
 ---
 
@@ -187,6 +264,44 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
 - `starting` - Container is in start-period
 - `healthy` - Health check passing
 - `unhealthy` - Health check failing (after retries)
+
+---
+
+## Why Use a Docker Image to Compile Code?
+
+Yes, a Docker image is used to compile the code. The first stage of our Dockerfile uses the **Maven image** (`maven:3.9-eclipse-temurin-17`) specifically to build the Java application. Here’s why that design is used and what it gives you.
+
+### What Actually Happens
+
+1. **Build stage** – Docker starts a container from the Maven image. Inside that container it runs `mvn dependency:go-offline` and `mvn package`. So **compilation happens inside a container**, not on your host. The output is the JAR in `/app/target/`.
+2. **Runtime stage** – A new, minimal image (JRE only) is used. Only the built JAR is copied in with `COPY --from=build ...`. Maven, JDK, and source code are **not** part of this final image.
+
+So: one image is used as the **build environment** (compile + package), and a different image is used as the **run environment** (only run the JAR).
+
+### Why Compile Inside Docker (Build Image)?
+
+| Reason | Explanation |
+|--------|-------------|
+| **Reproducibility** | The same Maven and JDK versions are used every time, on any machine. No “works on my machine” due to different Java or Maven versions. |
+| **No host tooling required** | You don’t need Java or Maven installed on the host. Only Docker is required to build and run. |
+| **Isolation** | Build dependencies and cache live inside the build container, not in your global Maven repo, so builds are isolated and consistent. |
+| **CI/CD alignment** | CI pipelines (Jenkins, GitHub Actions, etc.) typically run in containers. Building inside Docker matches that: “build in container, run in container.” |
+| **Smaller final image** | The final image does not include the JDK, Maven, or source. It only has the JRE and the JAR, so the image stays small and secure. |
+
+### Why Not Compile on the Host and Only Copy the JAR?
+
+You could build on the host (`mvn package`) and then copy the JAR into a simple runtime image. That approach has drawbacks:
+
+- **Requires host tooling** – Everyone and every CI job needs the same Java and Maven versions.
+- **Reproducibility** – Different developers or CI nodes can produce subtly different JARs (different OS, JDK vendor, or Maven version).
+- **Single source of truth** – With “build inside Docker,” the Dockerfile is the only place that defines how the app is built and run; no separate docs for “install this JDK and Maven.”
+
+### Why Two Stages (Build vs Runtime)?
+
+- **Build stage** – Bigger image (Maven + JDK) is acceptable because it’s only used during `docker build` and is discarded. It’s never shipped or run in production.
+- **Runtime stage** – Only JRE + JAR. No compiler, no Maven, no source. That’s what gets stored locally (and in a registry), used in production, and kept small and secure.
+
+So: **a Docker image is used to compile the code** so that building is reproducible and independent of the host, and the **final image** that you store and run only contains what’s needed to run the app.
 
 ---
 
